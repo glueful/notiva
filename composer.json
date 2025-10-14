@@ -48,13 +48,13 @@
             "name": "Notiva",
             "displayName": "Notiva Push Notifications",
             "description": "Push notifications for Glueful (FCM, APNs, Web Push)",
-            "version": "0.1.0",
+            "version": "0.5.0",
             "icon": "assets/icon.png",
             "categories": ["notifications", "communication"],
             "publisher": "glueful-team",
             "provider": "Glueful\\\\Extensions\\\\Notiva\\\\NotivaServiceProvider",
             "requires": {
-                "glueful": ">=1.5.0",
+                "glueful": ">=1.6.1",
                 "extensions": []
             }
         }
