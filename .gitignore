@@ -1,0 +1,23 @@
+# --- Composer (library package) ---
+vendor
+/composer.lock
+/composer.phar
+
+# --- Environment files ---
+/.env
+/.env.*
+!.env.example
+
+# --- IDE / Editor ---
+/.idea/
+/.vscode/
+/*.code-workspace
+
+# --- PHPUnit / QA caches ---
+/.phpunit.result.cache
+.phpunit.cache/
+/.php-cs-fixer.cache
+
+# --- OS / Misc ---
+.DS_Store
+*.log

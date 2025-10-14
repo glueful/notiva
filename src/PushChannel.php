@@ -412,12 +412,115 @@ class PushChannel implements NotificationChannel
      */
     private function sendApns(array $targets, array $payload): bool
     {
-        // If edamov/pushok is available, this can be wired up later.
-        $this->logger->info('APNs send (scaffold)', [
-            'count' => is_countable($targets) ? count($targets) : 1,
-            'title' => $payload['title'] ?? null,
-        ]);
-        return true;
+        if (!class_exists('Pushok\\ApnsClient')) {
+            $this->logger->warning('APNs library not installed (edamov/pushok)');
+            return false;
+        }
+
+        $cfg = (array)($this->config['drivers']['apns'] ?? []);
+        $sandbox = (bool)($cfg['sandbox'] ?? true);
+        $bundleId = (string)($cfg['app_bundle_id'] ?? ($cfg['bundle_id'] ?? ''));
+
+        $usingToken = !empty($cfg['p8_path']) && !empty($cfg['key_id']) && !empty($cfg['team_id']) && !empty($bundleId);
+        $usingCert = !empty($cfg['certificate']);
+
+        if (!$usingToken && !$usingCert) {
+            $this->logger->error('APNs configuration incomplete: provide token (p8,key_id,team_id,bundle_id) or certificate');
+            return false;
+        }
+
+        try {
+            if ($usingToken) {
+                $auth = new \Pushok\AuthProvider\Token([
+                    'key_id' => (string)$cfg['key_id'],
+                    'team_id' => (string)$cfg['team_id'],
+                    'app_bundle_id' => $bundleId,
+                    'private_key_path' => (string)$cfg['p8_path'],
+                    'private_key_secret' => null,
+                ]);
+            } else {
+                $auth = new \Pushok\AuthProvider\Certificate(
+                    (string)$cfg['certificate'],
+                    (string)($cfg['passphrase'] ?? '')
+                );
+            }
+
+            $client = new \Pushok\ApnsClient($auth, !$sandbox);
+
+            // Build payload
+            $alert = \Pushok\Payload\Alert::create();
+            if (!empty($payload['title'])) {
+                $alert->setTitle((string)$payload['title']);
+            }
+            if (!empty($payload['body'])) {
+                $alert->setBody((string)$payload['body']);
+            }
+
+            $aps = \Pushok\Payload::create()->setAlert($alert);
+            if (!empty($payload['sound'])) {
+                $aps->setSound((string)$payload['sound']);
+            }
+            if (isset($payload['badge'])) {
+                $aps->setBadge((int)$payload['badge']);
+            }
+            if (!empty($payload['category'])) {
+                $aps->setCategory((string)$payload['category']);
+            }
+            if (isset($payload['data']) && is_array($payload['data'])) {
+                $aps->setCustomValue('data', $payload['data']);
+            }
+
+            $pushType = (string)($payload['apns_push_type'] ?? 'alert'); // alert|background|voip etc.
+            $priority = (int)($payload['apns_priority'] ?? 10); // 10 immediate, 5 background
+            $collapseId = isset($payload['collapse_id']) ? (string)$payload['collapse_id'] : null;
+
+            $notifications = [];
+            // Normalize targets tokens
+            $tokens = is_array($targets) && isset($targets[0]) ? $targets : (array)$targets;
+            foreach ($tokens as $token) {
+                if (!is_string($token) || $token === '') {
+                    continue;
+                }
+                $n = new \Pushok\Notification($aps, $token);
+                $n->setPushType($pushType);
+                if ($bundleId !== '') {
+                    $n->setTopic($bundleId);
+                }
+                if ($collapseId !== null) {
+                    $n->setCollapseId($collapseId);
+                }
+                $n->setPriority(in_array($priority, [5,10], true) ? $priority : 10);
+                $notifications[] = $n;
+            }
+
+            if ($notifications === []) {
+                $this->logger->warning('No APNs tokens provided');
+                return false;
+            }
+
+            $sender = new \Pushok\Sender($client, $notifications);
+            $responses = $sender->send();
+
+            $successAny = false;
+            foreach ($responses as $response) {
+                if ($response->isSuccessful()) {
+                    $successAny = true;
+                } else {
+                    $this->logger->warning('APNs delivery failed', [
+                        'status' => $response->getStatusCode(),
+                        'reason' => $response->getErrorReason(),
+                        'details' => $response->getErrorDescription(),
+                    ]);
+                }
+            }
+
+            return $successAny;
+        } catch (\Throwable $e) {
+            $this->logger->error('APNs exception', [
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
     }
 
     /**
@@ -426,11 +529,102 @@ class PushChannel implements NotificationChannel
      */
     private function sendWebPush(array $targets, array $payload): bool
     {
-        // If minishlink/web-push is available, this can be wired up later.
-        $this->logger->info('WebPush send (scaffold)', [
-            'count' => is_countable($targets) ? count($targets) : 1,
-            'title' => $payload['title'] ?? null,
-        ]);
-        return true;
+        if (!class_exists('Minishlink\\WebPush\\WebPush')) {
+            $this->logger->warning('WebPush library not installed (minishlink/web-push)');
+            return false;
+        }
+
+        $vapid = (array)($this->config['drivers']['webpush']['vapid'] ?? []);
+        $publicKey = $vapid['public_key'] ?? null;
+        $privateKey = $vapid['private_key'] ?? null;
+        $subject = $vapid['subject'] ?? null; // mailto: or origin URL per spec
+
+        if (!$publicKey || !$privateKey || !$subject) {
+            $this->logger->error('WebPush VAPID configuration missing', [
+                'has_public' => (bool)$publicKey,
+                'has_private' => (bool)$privateKey,
+                'has_subject' => (bool)$subject,
+            ]);
+            return false;
+        }
+
+        try {
+            $webPush = new \Minishlink\WebPush\WebPush([
+                'VAPID' => [
+                    'subject' => (string)$subject,
+                    'publicKey' => (string)$publicKey,
+                    'privateKey' => (string)$privateKey,
+                ],
+            ]);
+
+            // Build browser payload (client handles notification display)
+            $body = [
+                'title' => (string)($payload['title'] ?? ''),
+                'body' => (string)($payload['body'] ?? ''),
+                'icon' => $payload['icon'] ?? null,
+                'image' => $payload['image'] ?? null,
+                'badge' => $payload['badge'] ?? null,
+                'data' => (array)($payload['data'] ?? []),
+                'tag' => $payload['tag'] ?? null,
+                'renotify' => $payload['renotify'] ?? null,
+                'requireInteraction' => $payload['requireInteraction'] ?? null,
+                'actions' => $payload['actions'] ?? null, // [{action,title,icon}]
+            ];
+            // Remove nulls
+            $body = array_filter($body, fn($v) => $v !== null && $v !== '');
+            $jsonPayload = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if ($jsonPayload === false) {
+                $jsonPayload = '{}';
+            }
+
+            $successAny = false;
+            $ttl = isset($payload['ttl']) ? (int)$payload['ttl'] : 2419200; // 28 days default
+            $urgency = $payload['urgency'] ?? null; // very-low | low | normal | high
+
+            foreach ($targets as $sub) {
+                // Expect shape: ['endpoint' => ..., 'keys' => ['p256dh' => ..., 'auth' => ...]]
+                if (!is_array($sub) || empty($sub['endpoint']) || empty($sub['keys']['p256dh']) || empty($sub['keys']['auth'])) {
+                    $this->logger->warning('Invalid WebPush subscription format');
+                    continue;
+                }
+
+                $subscription = \Minishlink\WebPush\Subscription::create([
+                    'endpoint' => (string)$sub['endpoint'],
+                    'publicKey' => (string)$sub['keys']['p256dh'],
+                    'authToken' => (string)$sub['keys']['auth'],
+                ]);
+
+                $options = ['TTL' => $ttl];
+                if (is_string($urgency) && in_array($urgency, ['very-low','low','normal','high'], true)) {
+                    $options['urgency'] = $urgency;
+                }
+
+                try {
+                    $webPush->sendOneNotification($subscription, $jsonPayload, $options);
+                    $successAny = true; // Will be flipped to false if report shows failure
+                } catch (\Throwable $e) {
+                    $this->logger->warning('WebPush send error', [
+                        'message' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Flush and inspect reports
+            foreach ($webPush->flush() as $report) {
+                if (!$report->isSuccess()) {
+                    $this->logger->warning('WebPush delivery failed', [
+                        'endpoint' => $report->getRequest()->getUri(),
+                        'reason' => $report->getReason(),
+                    ]);
+                }
+            }
+
+            return $successAny;
+        } catch (\Throwable $e) {
+            $this->logger->error('WebPush exception', [
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
     }
 }
