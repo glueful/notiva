@@ -44,9 +44,6 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
     public function register(): void
     {
         $this->mergeConfig('notiva', require __DIR__ . '/../config/notiva.php');
-
-        // Register database migrations for this extension
-        $this->loadMigrationsFrom(__DIR__ . '/../migrations');
     }
 
     public function boot(): void
@@ -67,15 +64,9 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
                 }
             }
         }
-    }
 
-    public function routes(): void
-    {
+        // load migrations and routes
+        $this->loadMigrationsFrom(__DIR__ . '/../migrations');
         $this->loadRoutesFrom(__DIR__ . '/../routes.php');
-    }
-
-    public function getDependencies(): array
-    {
-        return [];
     }
 }
