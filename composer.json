@@ -26,7 +26,7 @@
             "url": "${GLUEFUL_PATH}"
         }
     ],
-    "homepage": "https://github.com/glueful/extensions/tree/main/extensions/notiva",
+    "homepage": "https://github.com/glueful/notiva",
     "autoload": {
         "psr-4": {
             "Glueful\\\\Extensions\\\\Notiva\\\\": "src/"
@@ -54,7 +54,7 @@
             "publisher": "glueful-team",
             "provider": "Glueful\\\\Extensions\\\\Notiva\\\\NotivaServiceProvider",
             "requires": {
-                "glueful": ">=1.6.1",
+                "glueful": ">=1.6.2",
                 "extensions": []
             }
         }
