@@ -68,5 +68,17 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
         // load migrations and routes
         $this->loadMigrationsFrom(__DIR__ . '/../migrations');
         $this->loadRoutesFrom(__DIR__ . '/../routes.php');
+
+        // Register extension metadata for CLI and diagnostics
+        try {
+            $this->app->get(\Glueful\Extensions\ExtensionManager::class)->registerMeta(self::class, [
+                'slug' => 'notiva',
+                'name' => 'Notiva',
+                'version' => '0.5.1',
+                'description' => 'Push notifications for Glueful (FCM, APNs, Web Push)',
+            ]);
+        } catch (\Throwable $e) {
+            error_log('[Notiva] Failed to register extension metadata: ' . $e->getMessage());
+        }
     }
 }
