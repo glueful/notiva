@@ -29,12 +29,12 @@
     "homepage": "https://github.com/glueful/notiva",
     "autoload": {
         "psr-4": {
-            "Glueful\\\\Extensions\\\\Notiva\\\\": "src/"
+            "Glueful\\Extensions\\Notiva\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Glueful\\\\Extensions\\\\Notiva\\\\Tests\\\\": "tests/"
+            "Glueful\\Extensions\\Notiva\\Tests\\": "tests/"
         }
     },
     "scripts": {
@@ -48,11 +48,11 @@
             "name": "Notiva",
             "displayName": "Notiva Push Notifications",
             "description": "Push notifications for Glueful (FCM, APNs, Web Push)",
-            "version": "0.6.0",
+            "version": "0.6.1",
             "icon": "assets/icon.png",
             "categories": ["notifications", "communication"],
             "publisher": "glueful-team",
-            "provider": "Glueful\\\\Extensions\\\\Notiva\\\\NotivaServiceProvider",
+            "provider": "Glueful\\Extensions\\Notiva\\NotivaServiceProvider",
             "requires": {
                 "glueful": ">=1.9.0",
                 "extensions": []
