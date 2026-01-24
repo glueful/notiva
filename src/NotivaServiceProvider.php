@@ -15,7 +15,7 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
 
     public function getVersion(): string
     {
-        return '0.1.0';
+        return '0.6.2';
     }
 
     public function getDescription(): string
