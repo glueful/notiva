@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [0.7.0] - 2026-01-31
+
+### Changed
+- **Framework Compatibility**: Updated minimum framework requirement to Glueful 1.22.0
+  - Compatible with the new `ApplicationContext` dependency injection pattern
+  - No code changes required in extension - framework handles context propagation
+- **composer.json**: Updated `extra.glueful.requires.glueful` to `>=1.22.0`
+
+### Notes
+- This release ensures compatibility with Glueful Framework 1.22.0's context-based dependency injection
+- All existing functionality remains unchanged
+- Run `composer update` after upgrading
+
 ## [0.6.2] - 2026-01-24
 
 ### Changed

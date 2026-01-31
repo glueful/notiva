@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Glueful\Extensions\Notiva;
 
+use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Logging\LogManager;
 use Glueful\Notifications\Contracts\Notifiable;
 use Glueful\Notifications\Contracts\NotificationExtension;
@@ -19,13 +20,15 @@ class NotivaProvider implements NotificationExtension
     private bool $initialized = false;
     private ?PushChannel $channel = null;
     private LogManager $logger;
+    private ApplicationContext $context;
 
     /**
      * @param array<string, mixed> $config
      */
-    public function __construct(array $config = [])
+    public function __construct(ApplicationContext $context, array $config = [])
     {
-        $extensionConfig = \config('notiva') ?? [];
+        $this->context = $context;
+        $extensionConfig = config($this->context, 'notiva') ?? [];
         $this->config = array_merge($extensionConfig, $config);
         $this->logger = new LogManager('notiva');
     }
@@ -46,7 +49,7 @@ class NotivaProvider implements NotificationExtension
 
         try {
             $formatter = new PushFormatter();
-            $this->channel = new PushChannel($this->config, $formatter);
+            $this->channel = new PushChannel($this->context, $this->config, $formatter);
 
             if (!$this->channel->isAvailable()) {
                 return false;
