@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Glueful\Extensions\Notiva;
 
+use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Notifications\Services\ChannelManager;
 
 class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
@@ -15,7 +16,7 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
 
     public function getVersion(): string
     {
-        return '0.6.2';
+        return '0.7.0';
     }
 
     public function getDescription(): string
@@ -33,20 +34,22 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
             PushChannel::class => [
                 'class' => PushChannel::class,
                 'shared' => true,
+                'autowire' => true,
             ],
             NotivaProvider::class => [
                 'class' => NotivaProvider::class,
                 'shared' => true,
+                'autowire' => true,
             ],
         ];
     }
 
-    public function register(): void
+    public function register(ApplicationContext $context): void
     {
         $this->mergeConfig('notiva', require __DIR__ . '/../config/notiva.php');
     }
 
-    public function boot(): void
+    public function boot(ApplicationContext $context): void
     {
         if ($this->app->has(ChannelManager::class)) {
             $provider = $this->app->get(NotivaProvider::class);
@@ -74,7 +77,7 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
             $this->app->get(\Glueful\Extensions\ExtensionManager::class)->registerMeta(self::class, [
                 'slug' => 'notiva',
                 'name' => 'Notiva',
-                'version' => '0.5.1',
+                'version' => '0.7.0',
                 'description' => 'Push notifications for Glueful (FCM, APNs, Web Push)',
             ]);
         } catch (\Throwable $e) {

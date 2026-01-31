@@ -16,8 +16,8 @@ Notiva provides a unified, multi-channel push notification layer for the Glueful
 
 ## Requirements
 
-- PHP 8.2+
-- Glueful Framework 0.29.0+
+- PHP 8.3+
+- Glueful Framework 1.22.0+
 - OpenSSL PHP extension
 - Optional libraries:
   - FCM: built-in over Glueful HTTP client (no extra package)

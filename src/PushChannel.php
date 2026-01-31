@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Glueful\Extensions\Notiva;
 
+use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Logging\LogManager;
 use Glueful\Notifications\Contracts\Notifiable;
 use Glueful\Notifications\Contracts\NotificationChannel;
@@ -17,6 +18,7 @@ class PushChannel implements NotificationChannel
     private array $config;
     private PushFormatter $formatter;
     private LogManager $logger;
+    private ApplicationContext $context;
     /**
      * Simple in-memory cache for FCM access tokens keyed by client email + scope.
      * @var array<string, array{token: string, exp: int}>
@@ -26,9 +28,10 @@ class PushChannel implements NotificationChannel
     /**
      * @param array<string, mixed> $config
      */
-    public function __construct(array $config = [], ?PushFormatter $formatter = null)
+    public function __construct(ApplicationContext $context, array $config = [], ?PushFormatter $formatter = null)
     {
-        $this->config = $config === [] ? (\config('notiva') ?? []) : $config;
+        $this->context = $context;
+        $this->config = $config === [] ? (config($this->context, 'notiva') ?? []) : $config;
         $this->formatter = $formatter ?? new PushFormatter();
         $this->logger = new LogManager('push');
     }
@@ -169,7 +172,7 @@ class PushChannel implements NotificationChannel
     private function sendFcmV1(array $tokens, array $payload, string $projectId, string $credentials): bool
     {
         try {
-            $container = \app();
+            $container = app($this->context);
             if (!$container->has(\Glueful\Http\Client::class)) {
                 $this->logger->error('Glueful HTTP client unavailable; cannot send FCM v1 requests');
                 return false;
