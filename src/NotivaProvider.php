@@ -138,7 +138,7 @@ class NotivaProvider implements NotificationExtension
     {
         return [
             'name' => 'Notiva Push Notifications',
-            'version' => '0.1.0',
+            'version' => '0.8.0',
             'channels' => ['push'],
             'config' => $this->config,
         ];

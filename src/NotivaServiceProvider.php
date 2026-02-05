@@ -77,7 +77,7 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
             $this->app->get(\Glueful\Extensions\ExtensionManager::class)->registerMeta(self::class, [
                 'slug' => 'notiva',
                 'name' => 'Notiva',
-                'version' => '0.7.0',
+                'version' => '0.8.0',
                 'description' => 'Push notifications for Glueful (FCM, APNs, Web Push)',
             ]);
         } catch (\Throwable $e) {

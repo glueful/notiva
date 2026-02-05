@@ -14,6 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [0.8.0] - 2026-02-05
+
+### Changed
+- **Framework Compatibility**: Updated minimum framework requirement to Glueful 1.28.0
+  - Compatible with route caching infrastructure (Bellatrix release)
+  - Routes converted from closures to `[Controller::class, 'method']` syntax for cache compatibility
+- **Route Refactoring**: All device management routes now use controller syntax
+  - `POST /notiva/devices` → `DeviceController::store`
+  - `GET /notiva/devices` → `DeviceController::index`
+  - `DELETE /notiva/devices` → `DeviceController::destroy`
+- **composer.json**: Updated `extra.glueful.requires.glueful` to `>=1.28.0`
+
+### Added
+- **DeviceController**: New controller for push device management
+  - `store` - Register or update a push device token/subscription
+  - `index` - List registered devices for authenticated user
+  - `destroy` - Unregister a device by UUID or provider+token
+  - Helper method `injectUserUuid` for automatic user context
+
+### Notes
+- This release enables route caching for improved performance
+- All existing functionality remains unchanged
+- Run `composer update` after upgrading
+
 ## [0.7.0] - 2026-01-31
 
 ### Changed
