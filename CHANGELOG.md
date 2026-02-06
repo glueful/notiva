@@ -14,6 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [0.8.1] - 2026-02-06
+
+### Changed
+- **Version Management**: Version is now read from `composer.json` at runtime via `NotivaServiceProvider::composerVersion()`.
+  - `getVersion()` now returns `self::composerVersion()` instead of a hardcoded string.
+  - `registerMeta()` in `boot()` now uses `self::composerVersion()`.
+  - `NotivaProvider::getExtensionInfo()` now references `NotivaServiceProvider::composerVersion()`.
+  - Future releases only require updating `composer.json` and `CHANGELOG.md`.
+
+### Fixed
+- **Version Mismatch**: `getVersion()` was returning `0.7.0` while `composer.json` and `registerMeta()` specified `0.8.0`. All version references now read from `composer.json` as single source of truth.
+
+### Notes
+- No breaking changes. Internal refactor only.
+
 ## [0.8.0] - 2026-02-05
 
 ### Changed
