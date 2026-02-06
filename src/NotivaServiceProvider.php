@@ -9,6 +9,22 @@ use Glueful\Notifications\Services\ChannelManager;
 
 class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
 {
+    private static ?string $cachedVersion = null;
+
+    /**
+     * Read the extension version from composer.json (cached)
+     */
+    public static function composerVersion(): string
+    {
+        if (self::$cachedVersion === null) {
+            $path = __DIR__ . '/../composer.json';
+            $composer = json_decode(file_get_contents($path), true);
+            self::$cachedVersion = $composer['version'] ?? '0.0.0';
+        }
+
+        return self::$cachedVersion;
+    }
+
     public function getName(): string
     {
         return 'Notiva';
@@ -16,7 +32,7 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
 
     public function getVersion(): string
     {
-        return '0.7.0';
+        return self::composerVersion();
     }
 
     public function getDescription(): string
@@ -77,7 +93,7 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
             $this->app->get(\Glueful\Extensions\ExtensionManager::class)->registerMeta(self::class, [
                 'slug' => 'notiva',
                 'name' => 'Notiva',
-                'version' => '0.8.0',
+                'version' => self::composerVersion(),
                 'description' => 'Push notifications for Glueful (FCM, APNs, Web Push)',
             ]);
         } catch (\Throwable $e) {
