@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Glueful\Extensions\Notiva;
 
 use Glueful\Bootstrap\ApplicationContext;
+use Glueful\Extensions\Notiva\Controllers\DeviceController;
+use Glueful\Extensions\Notiva\Services\DeviceRegistry;
 use Glueful\Notifications\Services\ChannelManager;
 
 class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
@@ -54,6 +56,16 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
             ],
             NotivaProvider::class => [
                 'class' => NotivaProvider::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            DeviceRegistry::class => [
+                'class' => DeviceRegistry::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            DeviceController::class => [
+                'class' => DeviceController::class,
                 'shared' => true,
                 'autowire' => true,
             ],

@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [0.8.2] - 2026-02-09
+
+### Fixed
+- **Controller DI Registration**: `DeviceController` was not registered in `NotivaServiceProvider::services()`, causing `Service not found` errors when the router resolved the controller from the container. Controller is now explicitly registered with its dependencies.
+
+### Notes
+- Patch release. No breaking changes.
+
 ## [0.8.1] - 2026-02-06
 
 ### Changed
