@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [0.8.4] - 2026-02-24
+
+### Fixed
+- **Device registration 500 on PostgreSQL**: `DeviceRegistry::register()` was using the framework's `upsert()` which treated record values (including nulls) as identifiers in the PostgreSQL `ON CONFLICT` clause. Replaced with a database-agnostic find → update/insert flow: lookup by `provider` + `device_token`, then update if found or insert if not.
+- **Web Push missing endpoint validation**: If `subscription.endpoint` is absent or empty, the derived device token would be null, causing a DB error downstream. Now returns a validation error (`subscription.endpoint is required`) before hitting the database.
+
+### Notes
+- Patch release. No breaking changes.
+- The `upsert()` removal makes device registration fully database-agnostic (MySQL, PostgreSQL, SQLite).
+- The `orderBy` scalar fix from 0.8.3 is preserved.
+
 ## [0.8.3] - 2026-02-24
 
 ### Fixed
