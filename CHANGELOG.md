@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [0.8.3] - 2026-02-24
+
+### Fixed
+- **Device list 500 on PostgreSQL**: `DeviceRegistry::getDevices()` was using the associative-array `orderBy()` form (`['last_seen_at' => 'DESC']`), which hit a fragile code path in the Glueful PostgreSQL query builder where a null identifier reached `PostgreSQLDriver::wrapIdentifier()`. Changed to the scalar form `orderBy('last_seen_at', 'DESC')`.
+
+### Notes
+- Patch release. No breaking changes.
+- Only affects PostgreSQL deployments — MySQL/SQLite were unaffected.
+
 ## [0.8.2] - 2026-02-09
 
 ### Fixed
