@@ -65,6 +65,9 @@ class DeviceRegistry
         if (($deviceToken === null || $deviceToken === '') && $provider !== 'webpush') {
             return Response::validation(['device_token' => 'Device token is required']);
         }
+        if ($provider === 'webpush' && ($deviceToken === null || $deviceToken === '')) {
+            return Response::validation(['subscription.endpoint' => 'Web Push subscription endpoint is required']);
+        }
 
         $now = date('Y-m-d H:i:s');
         $uuid = Utils::generateNanoID(12);
@@ -107,14 +110,38 @@ class DeviceRegistry
                     ]);
             }
 
-            // Upsert current device
-            $affected = $this->db->table('push_devices')->upsert(
-                $record,
-                [
-                    'user_uuid', 'notifiable_type', 'notifiable_id', 'platform', 'subscription_json',
-                    'device_id', 'app_id', 'bundle_id', 'locale', 'timezone', 'status', 'last_seen_at', 'updated_at'
-                ]
-            );
+            // Database-agnostic "upsert": update existing row by unique provider+device_token, else insert.
+            // This avoids relying on driver-specific ON CONFLICT / ON DUPLICATE KEY behavior.
+            $existing = $this->db->table('push_devices')
+                ->where('provider', '=', $provider)
+                ->where('device_token', '=', (string) $deviceToken)
+                ->first();
+
+            if (is_array($existing) && isset($existing['id'])) {
+                $uuid = isset($existing['uuid']) && is_string($existing['uuid']) && $existing['uuid'] !== ''
+                    ? $existing['uuid']
+                    : $uuid;
+
+                $affected = $this->db->table('push_devices')
+                    ->where('id', '=', $existing['id'])
+                    ->update([
+                        'user_uuid' => $userUuid,
+                        'notifiable_type' => $data['notifiable_type'] ?? null,
+                        'notifiable_id' => $data['notifiable_id'] ?? null,
+                        'platform' => $platform,
+                        'subscription_json' => is_array($subscription) ? json_encode($subscription) : null,
+                        'device_id' => $deviceId,
+                        'app_id' => $appId,
+                        'bundle_id' => $bundleId,
+                        'locale' => $locale,
+                        'timezone' => $timezone,
+                        'status' => 'active',
+                        'last_seen_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+            } else {
+                $affected = $this->db->table('push_devices')->insert($record);
+            }
 
             return Response::success([
                 'affected' => $affected,
