@@ -158,7 +158,7 @@ class DeviceRegistry
                     'uuid', 'provider', 'platform', 'device_id', 'device_token', 'status',
                     'registered_at', 'last_seen_at', 'invalidated_at', 'app_id', 'bundle_id', 'locale', 'timezone'
                 ])
-                ->orderBy(['last_seen_at' => 'DESC'])
+                ->orderBy('last_seen_at', 'DESC')
                 ->get();
 
             return Response::success(['devices' => $devices], 'Devices retrieved');
