@@ -117,7 +117,16 @@ curl -s -X DELETE "$API_BASE/notiva/devices" \
 
 1) Register device
 - `POST /notiva/devices` (60/min)
-- Body (JSON or form): `user_uuid` (required), `provider` (`fcm|apns|webpush`, required), `platform`, `device_token` (for fcm/apns), `subscription` (for webpush), `device_id`, `app_id`, `bundle_id`, `locale`, `timezone`
+- Body (JSON or form): `user_uuid` (required), `provider` (`fcm|apns|webpush`, required), `platform`, `device_token` (for fcm/apns), `subscription` (for webpush), `device_id`, `notifiable_type`, `notifiable_id`, `app_id`, `bundle_id`, `locale`, `timezone`
+
+### Device registration field guidance
+
+- `notifiable_type` (optional): The model/entity type that owns this device when you use polymorphic notification targets. Send a stable class or type name used by your app (for example `App\\Models\\User`, `merchant`, `tenant_user`). Use this when a device may belong to different actor types, not just a single user table.
+- `notifiable_id` (optional): The identifier for the `notifiable_type` record. This should match the primary identifier your app uses for that type (for example a UUID, nanoid, or string ID). Send this together with `notifiable_type`.
+- `app_id` (optional): Your client application identifier for analytics/routing across multiple apps that share one backend. Examples: `parp-mobile`, `parp-web`, `admin-console`. This is an application-level label, not an OS package/bundle identifier.
+- `bundle_id` (optional, recommended for iOS/APNs): The platform package identifier for the app build that registered the device. Examples: `com.parp.app` (iOS/macOS bundle id) or `com.parp.android` (Android package/applicationId). For APNs, this should typically match the app topic/bundle used to send notifications.
+
+Send these fields when you need tenant/app/device segmentation, multi-app support, or polymorphic ownership. If you only target authenticated users in a single app, you can omit `notifiable_type`, `notifiable_id`, and `app_id`.
 
 2) List devices
 - `GET /notiva/devices` (100/min)
