@@ -29,19 +29,19 @@ Notiva provides a unified, multi-channel push notification layer for the Glueful
 ```bash
 composer require glueful/notiva
 
-# Rebuild extension cache
-php glueful extensions:cache
-
-# Enable in development
-php glueful extensions:enable Notiva
+# Enable it — installing does not auto-load an extension; this adds the provider to
+# config/extensions.php's `enabled` list and recompiles the cache.
+php glueful extensions:enable notiva
 
 # Run migrations for push_devices
 php glueful migrate run
 
 # Verify
 php glueful extensions:list
-php glueful extensions:info Notiva
+php glueful extensions:info notiva
 ```
+
+In production, manage the `enabled` list in config and run `php glueful extensions:cache` in your deploy step.
 
 ## Verify Installation
 
@@ -49,8 +49,8 @@ Check discovery and provider wiring:
 
 ```bash
 php glueful extensions:list
-php glueful extensions:info Notiva
-php glueful extensions:why Glueful\\Extensions\\Notiva\\NotivaServiceProvider
+php glueful extensions:info notiva
+php glueful extensions:diagnose
 ```
 
 Run database migrations (if not auto-run):
