@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Glueful\Extensions\Notiva;
 
 use Glueful\Bootstrap\ApplicationContext;
+use Glueful\Database\Migrations\MigrationPriority;
 use Glueful\Extensions\Notiva\Controllers\DeviceController;
 use Glueful\Extensions\Notiva\Services\DeviceRegistry;
 use Glueful\Notifications\Services\ChannelManager;
@@ -96,8 +97,10 @@ class NotivaServiceProvider extends \Glueful\Extensions\ServiceProvider
             }
         }
 
-        // load migrations and routes
-        $this->loadMigrationsFrom(__DIR__ . '/../migrations');
+        // load migrations and routes. push_devices holds a (FK-less) logical reference to
+        // users.uuid — owned by glueful/users at IDENTITY — so notiva migrates at DEPENDENT
+        // (after identity + app) and records its source as glueful/notiva.
+        $this->loadMigrationsFrom(__DIR__ . '/../migrations', MigrationPriority::DEPENDENT, 'glueful/notiva');
         $this->loadRoutesFrom(__DIR__ . '/../routes.php');
 
         // Register extension metadata for CLI and diagnostics
