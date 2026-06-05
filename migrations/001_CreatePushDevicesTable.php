@@ -58,11 +58,8 @@ class CreatePushDevicesTable implements MigrationInterface
             $table->index(['provider', 'platform']);
             $table->index('last_seen_at');
 
-            // Foreign keys
-            $table->foreign('user_uuid')
-                ->references('uuid')
-                ->on('users')
-                ->cascadeOnDelete();
+            // user_uuid is an indexed logical reference to users.uuid (owned by glueful/users);
+            // no cross-package FK (Phase 5 decoupling — integrity enforced at the service layer).
         });
     }
 

@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [0.9.0] - 2026-06-05 — Framework 1.50 Compatibility
+
+### Changed
+
+- **Dropped the cross-package FK** from `push_devices.user_uuid` → `users(uuid)`. `user_uuid` is now an **indexed logical reference** (the `users` table is owned by `glueful/users`; Phase-5 decoupling disallows cross-package FKs — integrity is enforced at the service layer). It remains nullable and indexed.
+- **Migrations register at `MigrationPriority::DEPENDENT`** with source `glueful/notiva` (previously a bare `loadMigrationsFrom()` with no priority/source — the old FK relied on migration ordering that was never guaranteed).
+- **Minimum framework raised to `glueful/framework >=1.50.1`** (`require-dev` pinned to `^1.50.1`); previously `>=1.28.0`.
+
+### Notes
+
+- Compatibility/decoupling release — **no change to push delivery or device registration**. `PushChannel` uses the current `NotificationChannel` contract, and device storage is the extension's own `push_devices` table (queried by the now-indexed `user_uuid`). Notiva never referenced the removed `Glueful\Repository\UserRepository`.
+
 ## [0.8.4] - 2026-02-24
 
 ### Fixed
