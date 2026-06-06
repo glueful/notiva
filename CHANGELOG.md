@@ -14,6 +14,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [0.10.0] - 2026-06-06 — Notification Subsystem Refinement (Framework 1.51)
+
+### Added
+
+- **Structured channel results.** `PushChannel` now implements `Glueful\Notifications\Contracts\RichNotificationChannel` and returns a `NotificationResult` from `sendNotification()` — surfacing send latency, per-driver outcome metadata (`drivers_attempted` / `drivers_succeeded`), and stable error codes: `no_targets` (no push routes → non-retryable), `no_eligible_driver` (no enabled driver matched a target → non-retryable, a config/targeting issue), and `all_drivers_failed` (every attempted driver failed → retryable). The framework dispatcher (1.51.0+) records these per channel; the legacy `send(): bool` contract is preserved by delegating to `sendNotification()`. Push is multi-target/multi-driver, so no single provider message id is surfaced.
+
+### Changed
+
+- **Minimum framework requirement raised to `glueful/framework >=1.51.0`** (`require-dev` pinned to `^1.51.0`).
+- **Channel/hook registration migrated to the framework's extension helpers.** `NotivaServiceProvider::boot()` now calls `registerNotificationChannel()` / `registerNotificationExtension()` instead of reaching into the container by hand. This is now the **only** wiring path — framework 1.51.0 stopped hardcoding notification providers in its jobs, so an extension that doesn't register from `boot()` won't auto-wire into the shared dispatcher used by async dispatch/retries.
+
+### Fixed
+
+- **APNs delivery was non-functional and is now corrected.** The APNs path targeted a pushok API that does not exist in any released version: it guarded on `class_exists('Pushok\ApnsClient')` (the real client is `Pushok\Client`, so the guard was always false and **APNs never sent**), and used `new Token([…])` / `new Certificate(…)` (private constructors — must use `::create([…])`), `Notification::setPushType/setTopic/setPriority` (nonexistent — push type lives on `Payload`, priority is `setHighPriority()/setLowPriority()`, topic derives from the auth provider), and `new Pushok\Sender(…)->send()` (no such class — it's `Client::addNotifications()->push()`). `sendApns()` is rewritten against the real **pushok `^0.19`** API; FCM and Web Push were unaffected. (Cannot be delivery-verified without live Apple credentials; the payload/notification building is covered by unit tests.)
+- **Extension version reporting.** `composerVersion()` read a non-existent top-level `version` key (returning `0.0.0` to the CLI/diagnostics); it now reads the canonical `extra.glueful.version`.
+- **Static-analysis cleanups (no behavior change).** Removed a dead `is_string()` branch in FCM token normalization, dropped a redundant `isset()` on the always-present FCM token-cache keys, tightened `buildApnsOptions()` to its real non-null `array` return type, and corrected a stale `@param` on `DeviceRegistry::register()`.
+
+### Internal
+
+- **Test harness + APNs unit tests.** Added `phpunit.xml` and `tests/Unit/PushChannelApnsTest.php` covering the pure APNs payload-building (`buildApnsPayload`), token normalization, and the `RichNotificationChannel` no-targets result.
+- **Optional push libraries added to `require-dev`** (`edamov/pushok ^0.19`, `minishlink/web-push ^9.0`) so static analysis and tests exercise the real driver APIs. They remain `suggest`-only at runtime (corrected the unsatisfiable pushok `^1.0` suggestion to `^0.19`). PHPStan (level 5) is now clean across `src`.
+
+### Notes
+
+- The FCM HTTP v1 and Web Push delivery paths, driver ordering, and device registration are unchanged; only the previously-broken APNs path was rewritten.
+
 ## [0.9.0] - 2026-06-05 — Framework 1.50 Compatibility
 
 ### Changed

@@ -7,12 +7,19 @@ namespace Glueful\Extensions\Notiva;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Logging\LogManager;
 use Glueful\Notifications\Contracts\Notifiable;
-use Glueful\Notifications\Contracts\NotificationChannel;
+use Glueful\Notifications\Contracts\RichNotificationChannel;
+use Glueful\Notifications\Results\NotificationResult;
 
 /**
  * Push Notification Channel (FCM, APNs, Web Push)
+ *
+ * Implements {@see RichNotificationChannel}, so the framework dispatcher (1.51.0+) records a
+ * structured {@see NotificationResult} per send — send latency plus per-driver outcome metadata
+ * (`drivers_attempted` / `drivers_succeeded`) and stable error codes. Push is multi-target /
+ * multi-driver, so no single provider message id is surfaced. The legacy {@see self::send()}
+ * bool contract is preserved by delegating to {@see self::sendNotification()}.
  */
-class PushChannel implements NotificationChannel
+class PushChannel implements RichNotificationChannel
 {
     /** @var array<string, mixed> */
     private array $config;
@@ -42,24 +49,52 @@ class PushChannel implements NotificationChannel
     }
 
     /**
+     * Send the push notification (legacy bool contract).
+     *
+     * Delegates to {@see self::sendNotification()} and collapses the structured result to a
+     * bool, so existing `NotificationChannel::send()` callers are unaffected.
+     *
      * @param array<string, mixed> $data
      */
     public function send(Notifiable $notifiable, array $data): bool
     {
+        return $this->sendNotification($notifiable, $data)->success;
+    }
+
+    /**
+     * Send the push notification and return a structured {@see NotificationResult}.
+     *
+     * Records send latency and per-driver outcomes (`drivers_attempted` / `drivers_succeeded` in
+     * metadata), and maps failure modes to stable error codes: `no_targets` (no push routes —
+     * non-retryable), `no_eligible_driver` (no enabled driver matched a target — non-retryable,
+     * a config/targeting issue), and `all_drivers_failed` (every attempted driver failed —
+     * retryable). Success is reported when any driver delivered to at least one target.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function sendNotification(Notifiable $notifiable, array $data): NotificationResult
+    {
         $targets = $this->extractTargets($notifiable);
         if ($targets === []) {
-            return false;
+            return NotificationResult::failure(
+                errorCode: 'no_targets',
+                errorMessage: 'Notifiable has no push targets.',
+                retryable: false
+            );
         }
 
         $payload = $this->format($data, $notifiable);
         $order = (array) ($this->config['default_order'] ?? ['fcm','apns','webpush']);
 
-        $sent = false;
+        $start = microtime(true);
+        $attempted = [];
+        $succeeded = [];
         foreach ($order as $driver) {
             if (!isset($targets[$driver]) || !$this->driverEnabled($driver)) {
                 continue;
             }
 
+            $attempted[] = $driver;
             try {
                 $ok = match ($driver) {
                     'fcm' => $this->sendFcm((array) $targets['fcm'], $payload),
@@ -67,7 +102,9 @@ class PushChannel implements NotificationChannel
                     'webpush' => $this->sendWebPush((array) $targets['webpush'], $payload),
                     default => false,
                 };
-                $sent = $sent || $ok;
+                if ($ok) {
+                    $succeeded[] = $driver;
+                }
             } catch (\Throwable $e) {
                 $this->logger->error('Push send failed', [
                     'driver' => $driver,
@@ -76,7 +113,31 @@ class PushChannel implements NotificationChannel
             }
         }
 
-        return $sent;
+        $latencyMs = (int) round((microtime(true) - $start) * 1000);
+        $metadata = ['drivers_attempted' => $attempted, 'drivers_succeeded' => $succeeded];
+
+        if ($succeeded !== []) {
+            return NotificationResult::success(latencyMs: $latencyMs, metadata: $metadata);
+        }
+
+        if ($attempted === []) {
+            // No enabled driver had a matching target — a config/targeting problem, not transient.
+            return NotificationResult::failure(
+                errorCode: 'no_eligible_driver',
+                errorMessage: 'No enabled push driver matched the notifiable targets.',
+                retryable: false,
+                latencyMs: $latencyMs,
+                metadata: $metadata
+            );
+        }
+
+        return NotificationResult::failure(
+            errorCode: 'all_drivers_failed',
+            errorMessage: 'All attempted push drivers failed to deliver.',
+            retryable: true,
+            latencyMs: $latencyMs,
+            metadata: $metadata
+        );
     }
 
     /**
@@ -138,14 +199,12 @@ class PushChannel implements NotificationChannel
      */
     private function sendFcm(array $targets, array $payload): bool
     {
-        // Normalize tokens first
+        // Normalize tokens first ($targets is always an array per the signature).
         $tokens = [];
         if (isset($targets['token'])) {
             $tokens = (array) $targets['token'];
-        } elseif (is_array($targets) && isset($targets[0])) {
+        } elseif (isset($targets[0])) {
             $tokens = $targets;
-        } elseif (is_string($targets)) {
-            $tokens = [$targets];
         }
         $tokens = array_values(array_filter(array_map('strval', $tokens)));
         if ($tokens === []) {
@@ -269,7 +328,7 @@ class PushChannel implements NotificationChannel
         $scope = 'https://www.googleapis.com/auth/firebase.messaging';
         $cacheKey = hash('sha256', (string) $creds['client_email'] . '|' . $scope);
         $cached = self::$fcmTokenCache[$cacheKey] ?? null;
-        if (is_array($cached) && isset($cached['token'], $cached['exp']) && (int) $cached['exp'] > (time() + 30)) {
+        if (is_array($cached) && (int) $cached['exp'] > (time() + 30)) {
             return (string) $cached['token'];
         }
 
@@ -360,10 +419,13 @@ class PushChannel implements NotificationChannel
 
     /**
      * Build APNs-specific options for FCM v1 message.
+     *
+     * Always returns a non-empty array (it carries at least `payload.aps`).
+     *
      * @param array<string, mixed> $payload
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>
      */
-    private function buildApnsOptions(array $payload): ?array
+    private function buildApnsOptions(array $payload): array
     {
         $aps = array_filter([
             'alert' => array_filter([
@@ -384,7 +446,7 @@ class PushChannel implements NotificationChannel
             'payload' => ['aps' => $aps],
         ], fn($v) => $v !== null && $v !== '' && $v !== []);
 
-        return $apns !== [] ? $apns : null;
+        return $apns;
     }
 
     /**
@@ -415,7 +477,7 @@ class PushChannel implements NotificationChannel
      */
     private function sendApns(array $targets, array $payload): bool
     {
-        if (!class_exists('Pushok\\ApnsClient')) {
+        if (!class_exists(\Pushok\Client::class)) {
             $this->logger->warning('APNs library not installed (edamov/pushok)');
             return false;
         }
@@ -424,89 +486,58 @@ class PushChannel implements NotificationChannel
         $sandbox = (bool)($cfg['sandbox'] ?? true);
         $bundleId = (string)($cfg['app_bundle_id'] ?? ($cfg['bundle_id'] ?? ''));
 
-        $usingToken = !empty($cfg['p8_path']) && !empty($cfg['key_id']) && !empty($cfg['team_id']) && !empty($bundleId);
+        $usingToken = !empty($cfg['p8_path']) && !empty($cfg['key_id']) && !empty($cfg['team_id']) && $bundleId !== '';
         $usingCert = !empty($cfg['certificate']);
 
         if (!$usingToken && !$usingCert) {
-            $this->logger->error('APNs configuration incomplete: provide token (p8,key_id,team_id,bundle_id) or certificate');
+            $this->logger->error(
+                'APNs configuration incomplete: provide token (p8_path,key_id,team_id,app_bundle_id) or certificate'
+            );
+            return false;
+        }
+
+        $tokens = $this->normalizeApnsTokens($targets);
+        if ($tokens === []) {
+            $this->logger->warning('No APNs tokens provided');
             return false;
         }
 
         try {
-            if ($usingToken) {
-                $auth = new \Pushok\AuthProvider\Token([
+            // pushok auth providers use private constructors + ::create() factories. The APNs
+            // topic is derived from the auth provider's app_bundle_id (no per-notification topic).
+            $auth = $usingToken
+                ? \Pushok\AuthProvider\Token::create([
                     'key_id' => (string)$cfg['key_id'],
                     'team_id' => (string)$cfg['team_id'],
                     'app_bundle_id' => $bundleId,
                     'private_key_path' => (string)$cfg['p8_path'],
-                    'private_key_secret' => null,
+                    'private_key_secret' => isset($cfg['passphrase']) ? (string)$cfg['passphrase'] : null,
+                ])
+                : \Pushok\AuthProvider\Certificate::create([
+                    'certificate_path' => (string)$cfg['certificate'],
+                    'certificate_secret' => (string)($cfg['passphrase'] ?? ''),
+                    'app_bundle_id' => $bundleId !== '' ? $bundleId : null,
                 ]);
-            } else {
-                $auth = new \Pushok\AuthProvider\Certificate(
-                    (string)$cfg['certificate'],
-                    (string)($cfg['passphrase'] ?? '')
-                );
-            }
 
-            $client = new \Pushok\ApnsClient($auth, !$sandbox);
+            $client = new \Pushok\Client($auth, !$sandbox);
 
-            // Build payload
-            $alert = \Pushok\Payload\Alert::create();
-            if (!empty($payload['title'])) {
-                $alert->setTitle((string)$payload['title']);
-            }
-            if (!empty($payload['body'])) {
-                $alert->setBody((string)$payload['body']);
-            }
-
-            $aps = \Pushok\Payload::create()->setAlert($alert);
-            if (!empty($payload['sound'])) {
-                $aps->setSound((string)$payload['sound']);
-            }
-            if (isset($payload['badge'])) {
-                $aps->setBadge((int)$payload['badge']);
-            }
-            if (!empty($payload['category'])) {
-                $aps->setCategory((string)$payload['category']);
-            }
-            if (isset($payload['data']) && is_array($payload['data'])) {
-                $aps->setCustomValue('data', $payload['data']);
-            }
-
-            $pushType = (string)($payload['apns_push_type'] ?? 'alert'); // alert|background|voip etc.
-            $priority = (int)($payload['apns_priority'] ?? 10); // 10 immediate, 5 background
+            $aps = $this->buildApnsPayload($payload);
+            // apns-priority 5 is the only "low/background" value; everything else is immediate (10).
+            $lowPriority = ((int)($payload['apns_priority'] ?? 10)) === 5;
             $collapseId = isset($payload['collapse_id']) ? (string)$payload['collapse_id'] : null;
 
-            $notifications = [];
-            // Normalize targets tokens
-            $tokens = is_array($targets) && isset($targets[0]) ? $targets : (array)$targets;
             foreach ($tokens as $token) {
-                if (!is_string($token) || $token === '') {
-                    continue;
-                }
-                $n = new \Pushok\Notification($aps, $token);
-                $n->setPushType($pushType);
-                if ($bundleId !== '') {
-                    $n->setTopic($bundleId);
-                }
+                $notification = new \Pushok\Notification($aps, $token);
                 if ($collapseId !== null) {
-                    $n->setCollapseId($collapseId);
+                    $notification->setCollapseId($collapseId);
                 }
-                $n->setPriority(in_array($priority, [5,10], true) ? $priority : 10);
-                $notifications[] = $n;
+                $lowPriority ? $notification->setLowPriority() : $notification->setHighPriority();
+                $client->addNotification($notification);
             }
-
-            if ($notifications === []) {
-                $this->logger->warning('No APNs tokens provided');
-                return false;
-            }
-
-            $sender = new \Pushok\Sender($client, $notifications);
-            $responses = $sender->send();
 
             $successAny = false;
-            foreach ($responses as $response) {
-                if ($response->isSuccessful()) {
+            foreach ($client->push() as $response) {
+                if ($response->getStatusCode() === 200) {
                     $successAny = true;
                 } else {
                     $this->logger->warning('APNs delivery failed', [
@@ -524,6 +555,59 @@ class PushChannel implements NotificationChannel
             ]);
             return false;
         }
+    }
+
+    /**
+     * Build a pushok APNs {@see \Pushok\Payload} from our normalized push payload.
+     *
+     * Pure (no I/O) so it can be unit-tested without APNs credentials. In pushok 0.19 the push
+     * type lives on the payload (not the notification).
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function buildApnsPayload(array $payload): \Pushok\Payload
+    {
+        $alert = \Pushok\Payload\Alert::create();
+        if (!empty($payload['title'])) {
+            $alert->setTitle((string)$payload['title']);
+        }
+        if (!empty($payload['body'])) {
+            $alert->setBody((string)$payload['body']);
+        }
+
+        $aps = \Pushok\Payload::create()->setAlert($alert);
+        if (!empty($payload['sound'])) {
+            $aps->setSound((string)$payload['sound']);
+        }
+        if (isset($payload['badge'])) {
+            $aps->setBadge((int)$payload['badge']);
+        }
+        if (!empty($payload['category'])) {
+            $aps->setCategory((string)$payload['category']);
+        }
+        if (isset($payload['data']) && is_array($payload['data'])) {
+            $aps->setCustomValue('data', $payload['data']);
+        }
+        $aps->setPushType((string)($payload['apns_push_type'] ?? 'alert')); // alert|background|voip…
+
+        return $aps;
+    }
+
+    /**
+     * Normalize APNs target tokens (list or assoc) to a clean list of non-empty strings.
+     *
+     * @param array<int, string>|array<string, mixed> $targets
+     * @return list<string>
+     */
+    private function normalizeApnsTokens(array $targets): array
+    {
+        $out = [];
+        foreach ($targets as $token) {
+            if (is_string($token) && $token !== '') {
+                $out[] = $token;
+            }
+        }
+        return $out;
     }
 
     /**
