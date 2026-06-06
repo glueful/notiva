@@ -21,7 +21,7 @@ class DeviceRegistry
     /**
      * Register or update a device token/subscription and manage rotation.
      *
-     * @param array<string, mixed> $input
+     * @param Request $request
      * @return Response
      */
     public function register(Request $request): Response
