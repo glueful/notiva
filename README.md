@@ -155,6 +155,7 @@ return [
 - Channels supported: FCM HTTP v1, direct APNs (pushok), and Web Push (minishlink/web-push).
 - Graceful fallbacks: if APNs/Web Push libraries are not installed or config is missing, those channels are skipped with logs; others continue.
 - Device registry: includes migration for `push_devices` and secure endpoints to register/list/unregister.
+- Delivery feedback: tokens reported permanently dead by the provider (FCM `UNREGISTERED`, APNs 410/`BadDeviceToken`, expired Web Push subscriptions) are automatically marked `invalid` in `push_devices` so they are not retried. Apps that route pushes from their own token store are unaffected (no matching rows).
 - Middleware: endpoints ship with `auth` and `rate_limit` middleware; adjust per your needs.
 
 ## FCM HTTP v1

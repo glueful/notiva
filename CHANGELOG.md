@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Delivery feedback loop: provider-reported dead tokens are now invalidated.** When FCM returns 404 (`UNREGISTERED`), APNs returns 410 / `Unregistered` / `BadDeviceToken`, or a Web Push subscription reports expired, `PushChannel` now marks the matching `push_devices` row `invalid` (with `invalidated_at`) via the new `DeviceRegistry::invalidateToken(provider, token)` API, so dead tokens stop being retried forever. Web Push rows are located through the new `DeviceRegistry::webPushToken(endpoint)` derivation (the same `wp_` endpoint hash used at registration). The hook is failure-safe: apps that route pushes from their own token store simply match no rows, and registry errors never break the send path. FCM 400s are deliberately *not* treated as dead tokens (they can indicate a payload problem).
+
 ### Security
 
 - **Device endpoints no longer trust client-supplied `user_uuid` (IDOR).** All three `/notiva/devices` endpoints scoped operations to a `user_uuid` that could be overridden by the client (JSON body won the input merge on POST/DELETE; the query string won on GET). An authenticated user could register their own device token under another user's account (receiving that user's pushes), list another user's devices **including full device tokens**, and revoke or hard-delete another user's registrations. `DeviceController` now resolves the owner exclusively from the authenticated request attributes and passes it to `DeviceRegistry::register()/list()/unregister()` as an explicit argument; `user_uuid` is stripped from client input. **Breaking:** the `DeviceRegistry` method signatures gained a required `string $userUuid` parameter, and a client-sent `user_uuid` is now ignored.

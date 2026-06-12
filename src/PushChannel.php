@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Glueful\Extensions\Notiva;
 
 use Glueful\Bootstrap\ApplicationContext;
+use Glueful\Extensions\Notiva\Services\DeviceRegistry;
 use Glueful\Logging\LogManager;
 use Glueful\Notifications\Contracts\Notifiable;
 use Glueful\Notifications\Contracts\RichNotificationChannel;
@@ -281,6 +282,11 @@ class PushChannel implements RichNotificationChannel
                         'token' => substr($t, 0, 8) . '…',
                         'body' => $resp->getBody(),
                     ]);
+                    // 404 = UNREGISTERED: the token is permanently dead.
+                    // (400 can be a payload problem, so it is not treated as dead.)
+                    if ($resp->getStatusCode() === 404) {
+                        $this->invalidateDeviceToken('fcm', $t);
+                    }
                 }
             }
 
@@ -546,6 +552,16 @@ class PushChannel implements RichNotificationChannel
                         'reason' => $response->getErrorReason(),
                         'details' => $response->getErrorDescription(),
                     ]);
+                    // 410 Unregistered / BadDeviceToken: permanently dead token.
+                    $reason = $response->getErrorReason();
+                    $deadToken = $response->getDeviceToken();
+                    if (
+                        $deadToken !== null && $deadToken !== ''
+                        && ($response->getStatusCode() === 410
+                            || in_array($reason, ['Unregistered', 'BadDeviceToken'], true))
+                    ) {
+                        $this->invalidateDeviceToken('apns', $deadToken);
+                    }
                 }
             }
 
@@ -698,6 +714,12 @@ class PushChannel implements RichNotificationChannel
                             'reason' => $report->getReason(),
                             'expired' => $report->isSubscriptionExpired(),
                         ]);
+                        if ($report->isSubscriptionExpired()) {
+                            $this->invalidateDeviceToken(
+                                'webpush',
+                                DeviceRegistry::webPushToken((string) $sub['endpoint'])
+                            );
+                        }
                     }
                 } catch (\Throwable $e) {
                     $this->logger->warning('WebPush send error', [
@@ -712,6 +734,36 @@ class PushChannel implements RichNotificationChannel
                 'error' => $e->getMessage(),
             ]);
             return false;
+        }
+    }
+
+    /**
+     * Delivery feedback loop: mark a provider-reported dead token invalid in the
+     * device registry so it is not retried forever. Failure-safe — apps that route
+     * pushes from their own token store (not push_devices) simply see no matching
+     * rows, and registry errors never break the send path.
+     */
+    private function invalidateDeviceToken(string $provider, string $token): void
+    {
+        try {
+            $container = app($this->context);
+            if (!$container->has(DeviceRegistry::class)) {
+                return;
+            }
+            /** @var DeviceRegistry $registry */
+            $registry = $container->get(DeviceRegistry::class);
+            $invalidated = $registry->invalidateToken($provider, $token);
+            if ($invalidated > 0) {
+                $this->logger->info('Invalidated dead push token', [
+                    'provider' => $provider,
+                    'token' => substr($token, 0, 8) . '…',
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('Failed to invalidate dead push token', [
+                'provider' => $provider,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

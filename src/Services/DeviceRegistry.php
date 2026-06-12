@@ -53,7 +53,7 @@ class DeviceRegistry
         if ($provider === 'webpush' && is_array($subscription)) {
             $endpoint = (string)($subscription['endpoint'] ?? '');
             if ($endpoint !== '') {
-                $deviceToken = 'wp_' . substr(hash('sha256', $endpoint), 0, 64);
+                $deviceToken = self::webPushToken($endpoint);
             }
         }
 
@@ -262,6 +262,41 @@ class DeviceRegistry
                 'error' => 'db_error',
             ]);
         }
+    }
+
+    /**
+     * Mark a token's active registrations invalid — the delivery feedback loop.
+     *
+     * Called when a provider reports the token permanently dead (FCM UNREGISTERED,
+     * APNs 410/BadDeviceToken, expired Web Push subscription) so dead tokens are
+     * not retried forever. For webpush, pass the {@see self::webPushToken()} hash.
+     *
+     * @return int Number of registrations invalidated
+     */
+    public function invalidateToken(string $provider, string $deviceToken): int
+    {
+        if ($deviceToken === '') {
+            return 0;
+        }
+
+        return $this->db->table('push_devices')
+            ->where('provider', '=', $provider)
+            ->where('device_token', '=', $deviceToken)
+            ->where('status', '=', 'active')
+            ->update([
+                'status' => 'invalid',
+                'invalidated_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+    }
+
+    /**
+     * Canonical device_token for a Web Push subscription endpoint.
+     * Single source of truth for registration and delivery-feedback lookups.
+     */
+    public static function webPushToken(string $endpoint): string
+    {
+        return 'wp_' . substr(hash('sha256', $endpoint), 0, 64);
     }
 
     /**

@@ -267,4 +267,56 @@ final class DeviceRegistryTest extends TestCase
         );
         $this->assertSame(422, $response->getStatusCode());
     }
+
+    public function testInvalidateTokenMarksActiveRegistrationInvalid(): void
+    {
+        $this->registry->register(
+            $this->jsonRequest(['provider' => 'fcm', 'device_token' => 'dead-token']),
+            'user-aaa'
+        );
+
+        $affected = $this->registry->invalidateToken('fcm', 'dead-token');
+
+        $this->assertSame(1, $affected);
+        $row = $this->rows("device_token = 'dead-token'")[0];
+        $this->assertSame('invalid', $row['status']);
+        $this->assertNotNull($row['invalidated_at']);
+
+        // Already-invalid rows and unknown tokens are no-ops
+        $this->assertSame(0, $this->registry->invalidateToken('fcm', 'dead-token'));
+        $this->assertSame(0, $this->registry->invalidateToken('fcm', 'never-registered'));
+        $this->assertSame(0, $this->registry->invalidateToken('fcm', ''));
+    }
+
+    public function testInvalidateTokenIsScopedToProvider(): void
+    {
+        $this->registry->register(
+            $this->jsonRequest(['provider' => 'fcm', 'device_token' => 'shared-token']),
+            'user-aaa'
+        );
+
+        $this->assertSame(0, $this->registry->invalidateToken('apns', 'shared-token'));
+        $this->assertSame('active', $this->rows("device_token = 'shared-token'")[0]['status']);
+    }
+
+    public function testWebPushTokenMatchesRegistrationDerivation(): void
+    {
+        $endpoint = 'https://push.example.com/sub/abc';
+        $this->registry->register(
+            $this->jsonRequest([
+                'provider' => 'webpush',
+                'subscription' => [
+                    'endpoint' => $endpoint,
+                    'keys' => ['p256dh' => 'pk', 'auth' => 'at'],
+                ],
+            ]),
+            'user-aaa'
+        );
+
+        // The feedback loop must be able to find the row from the endpoint alone.
+        $affected = $this->registry->invalidateToken('webpush', DeviceRegistry::webPushToken($endpoint));
+
+        $this->assertSame(1, $affected);
+        $this->assertSame('invalid', $this->rows()[0]['status']);
+    }
 }
