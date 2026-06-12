@@ -28,7 +28,8 @@ $router->group(['prefix' => '/notiva'], function (Router $router) {
      * @response 422 "Validation failed"
      */
     $router->post('/devices', [DeviceController::class, 'store'])
-        ->middleware(['auth', 'rate_limit:60,60']);
+        ->middleware(['auth', 'rate_limit'])
+        ->rateLimit(60, 1); // 60 requests per minute
 
     /**
      * @route GET /notiva/devices
@@ -38,7 +39,8 @@ $router->group(['prefix' => '/notiva'], function (Router $router) {
      * @response 200 application/json "Devices retrieved"
      */
     $router->get('/devices', [DeviceController::class, 'index'])
-        ->middleware(['auth', 'rate_limit:100,60']);
+        ->middleware(['auth', 'rate_limit'])
+        ->rateLimit(100, 1); // 100 requests per minute
 
     /**
      * @route DELETE /notiva/devices
@@ -53,5 +55,6 @@ $router->group(['prefix' => '/notiva'], function (Router $router) {
      * @response 200 application/json "Device unregistered"
      */
     $router->delete('/devices', [DeviceController::class, 'destroy'])
-        ->middleware(['auth', 'rate_limit:20,60']);
+        ->middleware(['auth', 'rate_limit'])
+        ->rateLimit(20, 1); // 20 requests per minute
 });

@@ -309,11 +309,20 @@ class PushChannel implements RichNotificationChannel
             return null;
         }
 
+        // Use cached token if valid — checked before signing so the cache skips
+        // the RS256 work, not just the token-exchange round trip.
+        $scope = 'https://www.googleapis.com/auth/firebase.messaging';
+        $cacheKey = hash('sha256', (string) $creds['client_email'] . '|' . $scope);
+        $cached = self::$fcmTokenCache[$cacheKey] ?? null;
+        if (is_array($cached) && (int) $cached['exp'] > (time() + 30)) {
+            return (string) $cached['token'];
+        }
+
         try {
             $jwt = $this->buildGoogleAssertion(
                 (string) $creds['client_email'],
                 (string) $creds['private_key'],
-                'https://www.googleapis.com/auth/firebase.messaging',
+                $scope,
                 'https://oauth2.googleapis.com/token',
                 3600
             );
@@ -322,14 +331,6 @@ class PushChannel implements RichNotificationChannel
                 'error' => $e->getMessage(),
             ]);
             return null;
-        }
-
-        // Use cached token if valid
-        $scope = 'https://www.googleapis.com/auth/firebase.messaging';
-        $cacheKey = hash('sha256', (string) $creds['client_email'] . '|' . $scope);
-        $cached = self::$fcmTokenCache[$cacheKey] ?? null;
-        if (is_array($cached) && (int) $cached['exp'] > (time() + 30)) {
-            return (string) $cached['token'];
         }
 
         try {
@@ -687,21 +688,20 @@ class PushChannel implements RichNotificationChannel
                 }
 
                 try {
-                    $webPush->sendOneNotification($subscription, $jsonPayload, $options);
-                    $successAny = true; // Will be flipped to false if report shows failure
+                    // sendOneNotification() flushes immediately and returns the delivery report.
+                    $report = $webPush->sendOneNotification($subscription, $jsonPayload, $options);
+                    if ($report->isSuccess()) {
+                        $successAny = true;
+                    } else {
+                        $this->logger->warning('WebPush delivery failed', [
+                            'endpoint' => (string) $report->getRequest()->getUri(),
+                            'reason' => $report->getReason(),
+                            'expired' => $report->isSubscriptionExpired(),
+                        ]);
+                    }
                 } catch (\Throwable $e) {
                     $this->logger->warning('WebPush send error', [
                         'message' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            // Flush and inspect reports
-            foreach ($webPush->flush() as $report) {
-                if (!$report->isSuccess()) {
-                    $this->logger->warning('WebPush delivery failed', [
-                        'endpoint' => $report->getRequest()->getUri(),
-                        'reason' => $report->getReason(),
                     ]);
                 }
             }
