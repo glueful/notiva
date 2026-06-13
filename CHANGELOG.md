@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-13
+
 ### Added
 
 - **Delivery feedback loop: provider-reported dead tokens are now invalidated.** When FCM returns 404 (`UNREGISTERED`), APNs returns 410 / `Unregistered` / `BadDeviceToken`, or a Web Push subscription reports expired, `PushChannel` now marks the matching `push_devices` row `invalid` (with `invalidated_at`) via the new `DeviceRegistry::invalidateToken(provider, token)` API, so dead tokens stop being retried forever. Web Push rows are located through the new `DeviceRegistry::webPushToken(endpoint)` derivation (the same `wp_` endpoint hash used at registration). The hook is failure-safe: apps that route pushes from their own token store simply match no rows, and registry errors never break the send path. FCM 400s are deliberately *not* treated as dead tokens (they can indicate a payload problem).
