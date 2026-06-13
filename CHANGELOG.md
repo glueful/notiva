@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-13
+
+### Added
+
+- **Delivery feedback loop: provider-reported dead tokens are now invalidated.** When FCM returns 404 (`UNREGISTERED`), APNs returns 410 / `Unregistered` / `BadDeviceToken`, or a Web Push subscription reports expired, `PushChannel` now marks the matching `push_devices` row `invalid` (with `invalidated_at`) via the new `DeviceRegistry::invalidateToken(provider, token)` API, so dead tokens stop being retried forever. Web Push rows are located through the new `DeviceRegistry::webPushToken(endpoint)` derivation (the same `wp_` endpoint hash used at registration). The hook is failure-safe: apps that route pushes from their own token store simply match no rows, and registry errors never break the send path. FCM 400s are deliberately *not* treated as dead tokens (they can indicate a payload problem).
+
+### Security
+
+- **Device endpoints no longer trust client-supplied `user_uuid` (IDOR).** All three `/notiva/devices` endpoints scoped operations to a `user_uuid` that could be overridden by the client (JSON body won the input merge on POST/DELETE; the query string won on GET). An authenticated user could register their own device token under another user's account (receiving that user's pushes), list another user's devices **including full device tokens**, and revoke or hard-delete another user's registrations. `DeviceController` now resolves the owner exclusively from the authenticated request attributes and passes it to `DeviceRegistry::register()/list()/unregister()` as an explicit argument; `user_uuid` is stripped from client input. **Breaking:** the `DeviceRegistry` method signatures gained a required `string $userUuid` parameter, and a client-sent `user_uuid` is now ignored.
+- **Database error messages are no longer returned to clients.** `DeviceRegistry` 500 responses previously embedded `$e->getMessage()` (driver/SQL detail); errors are now logged to the `notiva` channel and the response carries only a generic `db_error` marker.
+- **`NotivaProvider::getExtensionInfo()` no longer exposes credentials.** It previously returned the full merged config — APNs passphrase, VAPID private key, and raw FCM service-account JSON. It now returns a sanitized summary (driver enabled flags, default order, feature flags).
+
+### Fixed
+
+- **Per-route rate limits are now actually enforced.** Routes used the `rate_limit:60,60` string form, whose parameters `EnhancedRateLimiterMiddleware` ignores (limits come only from `Route::getRateLimitConfig()`); the routes silently fell back to tier/global defaults. Now registered as `->middleware(['auth', 'rate_limit'])->rateLimit(N, 1)` (60/100/20 requests per minute for register/list/unregister).
+- **Web Push delivery failures were reported as success.** `sendWebPush()` set `successAny = true` unconditionally after `sendOneNotification()` — which flushes immediately and returns a `MessageSentReport` — and the subsequent `flush()` loop iterated an already-empty generator (the failure logging was dead code). An expired (410) subscription counted as a delivered push. The report is now inspected: only `isSuccess()` counts, and failures log endpoint, reason, and expiry.
+- **Token rotation no longer invalidates a user's other devices.** Registering without a `device_id` marked **all** of the user's other tokens for that provider invalid — a user with two iPhones lost push on the first when the second registered. Rotation now applies only when a `device_id` identifies the physical device, also catches NULL-token rows (which `!=` never matched), and rotation + upsert run inside a transaction so a failed upsert can no longer leave a user with zero active tokens.
+- **FCM token cache now skips the RS256 signing.** `getFcmAccessToken()` built and signed the OAuth JWT before consulting the token cache, so the cache only saved the HTTP round trip; the cache check now runs first.
+
+### Changed
+
+- Dropped the unused `vlucas/phpdotenv` hard dependency (the extension's only non-PHP requirement; nothing in `src/` used it).
+- phpcs scripts switched from the Squiz standard to PSR-12 (matching the framework); `src/` is PSR-12 clean.
+- README updated: `user_uuid` removed from endpoint docs and curl examples; device ownership documented as token-derived.
+
+### Internal
+
+- **`DeviceRegistry` test coverage added** (`tests/Unit/DeviceRegistryTest.php`, SQLite harness): ownership scoping (client `user_uuid` ignored on register/list/unregister, cross-user revocation blocked), upsert behavior, `device_id`-scoped rotation, multi-device preservation, webpush endpoint-hash tokens, and validation errors.
+
 ### Planned
 - Batch push notification sending
 - Push notification templates

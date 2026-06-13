@@ -64,21 +64,22 @@ Quick endpoint checks (replace placeholders):
 ```bash
 API_BASE=http://localhost:8000
 TOKEN="<YOUR_BEARER_TOKEN>"
-USER_UUID="<USER_UUID>"
+
+# Devices always belong to the authenticated user (resolved from the bearer
+# token) — user_uuid is never sent by the client.
 
 # 1) Register an FCM device
 curl -s -X POST "$API_BASE/notiva/devices" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_uuid": "'$USER_UUID'",
     "provider": "fcm",
     "platform": "android",
     "device_token": "fcm-token-example"
   }' | jq .
 
 # 2) List devices
-curl -s "$API_BASE/notiva/devices?user_uuid=$USER_UUID" \
+curl -s "$API_BASE/notiva/devices" \
   -H "Authorization: Bearer $TOKEN" | jq .
 
 # 3) Unregister device by provider+token (soft revoke)
@@ -86,7 +87,6 @@ curl -s -X DELETE "$API_BASE/notiva/devices" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_uuid": "'$USER_UUID'",
     "provider": "fcm",
     "device_token": "fcm-token-example"
   }' | jq .
@@ -97,7 +97,6 @@ curl -s -X DELETE "$API_BASE/notiva/devices" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_uuid": "'$USER_UUID'",
     "uuid": "'$DEVICE_UUID'",
     "force": true
   }' | jq .
@@ -114,10 +113,11 @@ curl -s -X DELETE "$API_BASE/notiva/devices" \
 ## Endpoints
 - Base prefix: `/notiva`
 - All endpoints require auth and apply rate limiting.
+- Devices are always scoped to the authenticated user; a client-supplied `user_uuid` is ignored.
 
 1) Register device
 - `POST /notiva/devices` (60/min)
-- Body (JSON or form): `user_uuid` (required), `provider` (`fcm|apns|webpush`, required), `platform`, `device_token` (for fcm/apns), `subscription` (for webpush), `device_id`, `notifiable_type`, `notifiable_id`, `app_id`, `bundle_id`, `locale`, `timezone`
+- Body (JSON or form): `provider` (`fcm|apns|webpush`, required), `platform`, `device_token` (for fcm/apns), `subscription` (for webpush), `device_id`, `notifiable_type`, `notifiable_id`, `app_id`, `bundle_id`, `locale`, `timezone`
 
 ### Device registration field guidance
 
@@ -130,11 +130,11 @@ Send these fields when you need tenant/app/device segmentation, multi-app suppor
 
 2) List devices
 - `GET /notiva/devices` (100/min)
-- Query: `user_uuid` (required), `provider` (optional), `platform` (optional)
+- Query: `provider` (optional), `platform` (optional)
 
 3) Unregister device
 - `DELETE /notiva/devices` (20/min)
-- Body/Query: `user_uuid` (required) and either `uuid` OR (`provider` + `device_token`)
+- Body/Query: either `uuid` OR (`provider` + `device_token`)
 - Optional: `force=true` to hard delete instead of revoke
 
 ## Notifiable Contract
@@ -155,6 +155,7 @@ return [
 - Channels supported: FCM HTTP v1, direct APNs (pushok), and Web Push (minishlink/web-push).
 - Graceful fallbacks: if APNs/Web Push libraries are not installed or config is missing, those channels are skipped with logs; others continue.
 - Device registry: includes migration for `push_devices` and secure endpoints to register/list/unregister.
+- Delivery feedback: tokens reported permanently dead by the provider (FCM `UNREGISTERED`, APNs 410/`BadDeviceToken`, expired Web Push subscriptions) are automatically marked `invalid` in `push_devices` so they are not retried. Apps that route pushes from their own token store are unaffected (no matching rows).
 - Middleware: endpoints ship with `auth` and `rate_limit` middleware; adjust per your needs.
 
 ## FCM HTTP v1

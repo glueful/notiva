@@ -140,8 +140,27 @@ class NotivaProvider implements NotificationExtension
             'name' => 'Notiva Push Notifications',
             'version' => NotivaServiceProvider::composerVersion(),
             'channels' => ['push'],
-            'config' => $this->config,
+            'config' => $this->sanitizedConfig(),
+        ];
+    }
+
+    /**
+     * Config summary safe for diagnostics surfaces — credentials (APNs passphrase,
+     * VAPID private key, FCM service-account JSON) are never included.
+     *
+     * @return array<string, mixed>
+     */
+    private function sanitizedConfig(): array
+    {
+        $drivers = [];
+        foreach ((array) ($this->config['drivers'] ?? []) as $name => $cfg) {
+            $drivers[$name] = ['enabled' => (bool) (is_array($cfg) ? ($cfg['enabled'] ?? false) : false)];
+        }
+
+        return [
+            'default_order' => $this->config['default_order'] ?? [],
+            'drivers' => $drivers,
+            'features' => $this->config['features'] ?? [],
         ];
     }
 }
-

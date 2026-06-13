@@ -11,7 +11,10 @@ use Symfony\Component\HttpFoundation\Request;
 /**
  * Device Controller
  *
- * Handles push notification device registration and management.
+ * Handles push notification device registration and management. The owner of every
+ * operation is the authenticated user (resolved from the request attributes set by
+ * the auth middleware) — never client-supplied input, so callers cannot act on
+ * another user's devices.
  */
 class DeviceController
 {
@@ -29,8 +32,11 @@ class DeviceController
      */
     public function store(Request $request): Response
     {
-        $this->injectUserUuid($request);
-        return $this->deviceRegistry->register($request);
+        $userUuid = $this->resolveUserUuid($request);
+        if ($userUuid === null) {
+            return Response::unauthorized('Authentication required');
+        }
+        return $this->deviceRegistry->register($request, $userUuid);
     }
 
     /**
@@ -40,11 +46,11 @@ class DeviceController
      */
     public function index(Request $request): Response
     {
-        $user = $request->attributes->get('user');
-        if ($user && !$request->query->has('user_uuid')) {
-            $request->query->set('user_uuid', $user['uuid'] ?? null);
+        $userUuid = $this->resolveUserUuid($request);
+        if ($userUuid === null) {
+            return Response::unauthorized('Authentication required');
         }
-        return $this->deviceRegistry->list($request);
+        return $this->deviceRegistry->list($request, $userUuid);
     }
 
     /**
@@ -54,18 +60,23 @@ class DeviceController
      */
     public function destroy(Request $request): Response
     {
-        $this->injectUserUuid($request);
-        return $this->deviceRegistry->unregister($request);
+        $userUuid = $this->resolveUserUuid($request);
+        if ($userUuid === null) {
+            return Response::unauthorized('Authentication required');
+        }
+        return $this->deviceRegistry->unregister($request, $userUuid);
     }
 
     /**
-     * Inject user UUID from authenticated user into request data
+     * Resolve the authenticated user's UUID from the request attributes
+     * populated by the auth middleware.
      */
-    private function injectUserUuid(Request $request): void
+    private function resolveUserUuid(Request $request): ?string
     {
         $user = $request->attributes->get('user');
-        if ($user) {
-            $request->request->set('user_uuid', $user['uuid'] ?? null);
+        if (is_array($user) && isset($user['uuid']) && is_string($user['uuid']) && $user['uuid'] !== '') {
+            return $user['uuid'];
         }
+        return null;
     }
 }
