@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Planned
+- Batch push notification sending
+- Push notification templates
+- Delivery analytics and reporting
+- Silent push support for background updates
+- Topic-based subscriptions
+
 ## [0.11.0] - 2026-06-13
 
 ### Added
@@ -35,13 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Internal
 
 - **`DeviceRegistry` test coverage added** (`tests/Unit/DeviceRegistryTest.php`, SQLite harness): ownership scoping (client `user_uuid` ignored on register/list/unregister, cross-user revocation blocked), upsert behavior, `device_id`-scoped rotation, multi-device preservation, webpush endpoint-hash tokens, and validation errors.
-
-### Planned
-- Batch push notification sending
-- Push notification templates
-- Delivery analytics and reporting
-- Silent push support for background updates
-- Topic-based subscriptions
 
 ## [0.10.0] - 2026-06-06 — Notification Subsystem Refinement (Framework 1.51)
 
