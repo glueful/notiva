@@ -7,13 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-
 ### Planned
 - Batch push notification sending
 - Push notification templates
 - Delivery analytics and reporting
 - Silent push support for background updates
 - Topic-based subscriptions
+
+## [0.13.0] - 2026-08-19
+
+### Added
+- Declares the Glueful schema manifest (migration descriptors, requires.extensions, structural
+  verifier); requires framework >=1.79.0 for schema-on-enable participation. Migrations are now
+  registered by the manifest, not by provider boot.
 
 ## [0.12.0] - 2026-06-14
 
