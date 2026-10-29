@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [1.13.0] - 2026-10-29
+
+### Fixed
+- Re-release of 0.13.0 under the correct version number. The 2026-06-15 release was tagged
+  v1.12.0 although its manifest said 0.12.0, so Composer ranked it above v0.13.0 and `^1.x`
+  constraints could never reach the schema manifest adoption. On framework 1.79+ that left the
+  provider failing at boot ("declares no extra.glueful.migrations manifest"): the `push_devices`
+  migration and the `/notiva/devices` routes were never loaded. No code changes besides the
+  version string.
+
 ## [0.13.0] - 2026-08-19
 
 ### Added
