@@ -24,7 +24,7 @@ final class SchemaManifestTest extends TestCase
         self::assertSame('migrations', $migrations[0]['path']);
         self::assertSame('dependent', $migrations[0]['priority']);
         self::assertSame('on_enable', $migrations[0]['mode']);
-        self::assertSame('>=1.79.0', $this->manifest()['requires']['glueful']);
+        self::assertSame('>=1.92.1', $this->manifest()['requires']['glueful']);
         self::assertSame([], $this->manifest()['requires']['extensions']);
     }
 
@@ -66,7 +66,7 @@ final class SchemaManifestTest extends TestCase
             requiresExtensions: $g['requires']['extensions'],
         )];
         $result = (new \Glueful\Extensions\ExtensionResolver())
-            ->resolve($candidates, [$g['provider']], '1.79.0');
+            ->resolve($candidates, [$g['provider']], '1.92.1');
         self::assertSame([], $result->errors, 'notiva must resolve enabled-alone');
     }
 
