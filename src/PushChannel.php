@@ -259,7 +259,7 @@ class PushChannel implements RichNotificationChannel
                     'message' => array_filter([
                         'token' => $t,
                         'notification' => $notification,
-                        'data' => (array) ($payload['data'] ?? []),
+                        'data' => $this->fcmData((array) ($payload['data'] ?? [])),
                         'android' => $this->buildAndroidOptions($payload),
                         'apns' => $this->buildApnsOptions($payload),
                     ])
@@ -422,6 +422,32 @@ class PushChannel implements RichNotificationChannel
         ], fn($v) => $v !== null && $v !== '' && $v !== []);
 
         return $android !== [] ? $android : null;
+    }
+
+    /**
+     * FCM HTTP v1 accepts only string values in `message.data` and rejects the whole message
+     * (400 INVALID_ARGUMENT) otherwise. Numbers and booleans become strings, arrays and objects
+     * become JSON, and nulls are dropped.
+     *
+     * @param array<int|string, mixed> $data
+     * @return array<string, string>
+     */
+    private function fcmData(array $data): array
+    {
+        $out = [];
+        foreach ($data as $key => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $out[(string) $key] = match (true) {
+                is_bool($value) => $value ? 'true' : 'false',
+                is_scalar($value) => (string) $value,
+                $value instanceof \Stringable => (string) $value,
+                default => (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            };
+        }
+
+        return $out;
     }
 
     /**

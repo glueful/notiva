@@ -14,6 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silent push support for background updates
 - Topic-based subscriptions
 
+## [1.13.1] - 2026-11-18
+
+### Fixed
+- **FCM no longer rejects pushes whose data holds non-string values.** FCM HTTP v1 requires every
+  `message.data` value to be a string and refuses the whole message otherwise (400
+  INVALID_ARGUMENT). Numbers and booleans are now sent as strings, arrays and objects as JSON,
+  and nulls are dropped.
+- **Pushes get their title from the notification subject.** Before framework 1.92.1 the subject
+  never reached channels and Notiva's hook (declared for `['*']`) never ran, so a push without
+  `title` or `body` in its data went out empty: FCM accepted it and the phone showed nothing.
+
+### Changed
+- Requires glueful/framework 1.92.1 or later (`^1.92.1`), the release with the two fixes above.
+
+### Upgrade Notes
+- If you set `body` in notification data to work around the empty title, it now shows under the
+  title. Drop it if it repeats the subject, or set `title` instead, which is kept.
+
 ## [1.13.0] - 2026-10-29
 
 ### Fixed
